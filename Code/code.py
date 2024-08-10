@@ -8,6 +8,7 @@ from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keyboard_layout_us import KeyboardLayoutUS
 import random
 import adafruit_ds3231
+import os
 
 # Constants
 PATTERN_LENGTH = 5
@@ -18,7 +19,7 @@ character_sets = [
 ]
 MAX_PASSWORD_LENGTH = 5
 PASSWORDS_FILE = "passwords.csv"
-LOCK_SCREEN, MAIN_MENU, VIEW_PASSWORDS, ADD_PASSWORD, GENERATE_PASSWORD, RTC_MENU, RTC_SET_TIME, RTC_CHECK_TIME, RTC_CHECK_STATUS, ENCRYPTION_MENU, ENCRYPT_FILE, DECRYPT_FILE = range(12)
+LOCK_SCREEN, MAIN_MENU, VIEW_PASSWORDS, ADD_PASSWORD, GENERATE_PASSWORD, RTC_MENU, RTC_SET_TIME, RTC_CHECK_TIME, RTC_CHECK_STATUS, ENCRYPTION_MENU, ENCRYPT_FILE, DECRYPT_FILE, TEST_ENCRYPTION = range(13)
 
 # Button pins
 BUTTON_PINS = {
@@ -74,6 +75,7 @@ user_input_index = 0
 password_input = ""
 current_set = 0
 character_position = 0
+passwords_data = []
 
 # Define SendStringHID function
 def SendStringHID(string):
@@ -84,34 +86,79 @@ def SendStringHID(string):
         print("USB HID not available. String not sent.")
 
 
-def draw_lock_screen():
-    """
-    Draw the lock screen on the OLED display.
-    """
+def draw_loading_screen():
     oled.fill(0)
-    oled.text("Device Locked", 10, 5, 1)  # Adding '1' as the color argument for white text
-    oled.text("Enter pattern:", 10, 20, 1)
-    for i in range(user_input_index):
-        oled.text("*", 10 + i * 10, 40, 1)  # Adding '1' as the color argument for white text
+    oled.text("Password Manager", 10, 10, 1)
+    oled.text("Loading...", 30, 30, 1)
     oled.show()
 
+    # Animate loading dots
+    for i in range(3):
+        time.sleep(0.5)
+        oled.text("." * (i + 1), 90, 30, 1)
+        oled.show()
+
+def draw_lock_screen():
+    """
+    Draw the lock screen on the OLED display with centered time above "Device Locked".
+    """
+    global user_input_index
+    
+    print(f"Drawing lock screen. user_input_index: {user_input_index}")  # Debug print
+
+    oled.fill(0)
+    
+    # Display current time
+    current_time = rtc.datetime
+    time_str = f"{current_time.tm_hour:02d}:{current_time.tm_min:02d}"
+    time_width = len(time_str) * 8
+    time_x = (128 - time_width) // 2
+    oled.text(time_str, time_x, 5, 1)
+    
+    oled.text("Device Locked", 10, 20, 1)
+    oled.text("Enter pattern:", 10, 35, 1)
+    
+    for i in range(user_input_index):
+        oled.text("*", 10 + i * 10, 50, 1)
+    
+    oled.show()
+
+def update_lock_screen_time():
+    current_time = rtc.datetime
+    time_str = f"{current_time.tm_hour:02d}:{current_time.tm_min:02d}"
+    time_width = len(time_str) * 8
+    time_x = (128 - time_width) // 2
+    oled.fill_rect(0, 5, 128, 8, 0)  # Clear the entire time area
+    oled.text(time_str, time_x, 5, 1)
+    oled.show()
+    
+
+    
+    
 def handle_lock_screen_input():
-    """
-    Handle input for the lock screen.
-    """
-    global reset_button_press_count
+    global user_input_index, current_screen
 
     if not BUTTON_PINS["UP"].value:
+        print("UP button pressed")  # Debug print
         record_user_input(True)
     elif not BUTTON_PINS["DOWN"].value:
+        print("DOWN button pressed")  # Debug print
         record_user_input(False)
 
+    print(f"Current user_input_index: {user_input_index}")  # Debug print
+
     if user_input_index == PATTERN_LENGTH:
+        print("Pattern length reached")  # Debug print
         if check_pattern():
-            reset_button_press_count = 0  # Reset the counter when the correct pattern is entered
-            go_to_main_menu()
-        else:
+            print("Correct pattern entered")  # Debug print
+            decrypt_file()  # Decrypt the file when unlocking
+            current_screen = MAIN_MENU
             reset_user_input()
+        else:
+            print("Incorrect pattern")  # Debug print
+            reset_user_input()
+    
+    draw_lock_screen()
 
 def load_passwords():
     try:
@@ -135,7 +182,7 @@ def display_password_entry(website, username, password):
 
 def draw_main_menu():
     oled.fill(0)
-    for i in range(selected_menu_item, min(selected_menu_item + 4, 6)):
+    for i in range(selected_menu_item, min(selected_menu_item + 4, 8)):
         menu_item_text = f" {get_menu_text(i)}"
         oled.text(menu_item_text, -3, 10 + (i - selected_menu_item) * 20, 1)  # Adding '1' as the color argument for white text
 
@@ -144,22 +191,67 @@ def draw_main_menu():
     oled.fill_rect(120, scrollbar_y, 3, 8, 1)  # Scrollbar indicator
     oled.show()
 
+def center_text(text, y, max_width=128):
+    text_width = len(text) * 6  # Assuming each character is 6 pixels wide
+    if text_width > max_width:
+        text = truncate_text(text, max_width // 6)
+        text_width = len(text) * 6
+    x = (max_width - text_width) // 2
+    oled.text(text, x, y, 1)
+
 def draw_view_passwords():
+    global passwords_data
+    if not passwords_data:
+        passwords_data = load_and_decrypt_passwords()
+
     oled.fill(0)
-    for i in range(current_password_index, min(current_password_index + 1, len(passwords_data))):
-        # Center the website text
-        x_website = (128 - len(passwords_data[i][0]) * 6) // 2
-        oled.text(passwords_data[i][0], x_website, 10, 1)  # Adding '1' as the color argument for white text
-
-        # Center the username text
-        x_username = (128 - len(passwords_data[i][1]) * 6) // 2
-        oled.text(passwords_data[i][1], x_username, 30, 1)  # Adding '1' as the color argument for white text
-
-        # Center the password text
-        x_password = (128 - len(passwords_data[i][2]) * 6) // 2
-        oled.text(passwords_data[i][2], x_password, 50, 1)  # Adding '1' as the color argument for white text
+    if not passwords_data:
+        center_text("No passwords", 30)
+    else:
+        entry = passwords_data[current_password_index]
+        
+        # Display password count and current index
+        oled.text(f"{current_password_index + 1}/{len(passwords_data)}", 0, 0, 1)
+        
+        # Display current password details (centered)
+        center_text(entry[0], 8)  # Website
+        center_text(entry[1], 24)  # Username
+        center_text(entry[2], 40)  # Password
+        
+        # Display navigation hints
+        oled.text("^v:Nav <:Back >:Type", 0, 56, 1)
 
     oled.show()
+    
+def truncate_text(text, max_length):
+    if len(text) <= max_length:
+        return text
+    return text[:max_length-3] + "..."
+
+def draw_password_detail():
+    oled.fill(0)
+    entry = passwords_data[current_password_index]
+    oled.text("Password:", 0, 0, 1)
+    
+    # Split password into multiple lines if necessary
+    password = entry[2]
+    max_chars_per_line = 16
+    for i in range(0, len(password), max_chars_per_line):
+        line = password[i:i+max_chars_per_line]
+        oled.text(line, 0, 16 + (i // max_chars_per_line) * 10, 1)
+    
+    oled.text("CLICK:Back RST:Type", 0, 56, 1)
+    oled.show()
+    
+    # Wait for button press
+    while True:
+        if not BUTTON_PINS["CLICK"].value or BUTTON_PINS["SET"].value == 0:
+            time.sleep(0.2)  # Debounce delay
+            break
+        elif BUTTON_PINS["RESET"].value == 0:
+            initialize_usb_hid()
+            SendStringHID(entry[2])
+            time.sleep(0.2)  # Debounce delay
 
 def draw_add_password():
     oled.fill(0)
@@ -245,6 +337,7 @@ def get_menu_text(menu_item):
         4: "RTC Menu",
         5: "Lock Device",
         6: "Encryption",
+        7: "Start Encryption",
     }
     return switcher.get(menu_item, "")
 
@@ -252,39 +345,49 @@ def handle_selected_menu_item():
     global current_screen, current_password_index
 
     if selected_menu_item == 0:
-        current_screen = VIEW_PASSWORDS  # Move to view passwords screen
+        current_screen = VIEW_PASSWORDS
         current_password_index = 0
+        print("Switching to VIEW_PASSWORDS screen")  # Debug print
     elif selected_menu_item == 1:
-        current_screen = ADD_PASSWORD  # Move to add password screen
+        current_screen = ADD_PASSWORD
     elif selected_menu_item == 2:
-        current_screen = GENERATE_PASSWORD  # Move to generate password screen
+        current_screen = GENERATE_PASSWORD
     elif selected_menu_item == 3:
         # Delete Password
         pass
     elif selected_menu_item == 4:
-        current_screen = RTC_MENU  # Move to RTC menu screen
+        current_screen = RTC_MENU
     elif selected_menu_item == 5:
-        lock_device()  # Lock the device
+        lock_device()
     elif selected_menu_item == 6:
         current_screen = ENCRYPTION_MENU
+    elif selected_menu_item == 7:
+        current_screen = TEST_ENCRYPTION
 
+    # Remove this line as it's preventing the screen from changing
     if BUTTON_PINS["SET"].value == 0:
         go_to_main_menu()
+
 
 def handle_view_passwords_input():
-    global current_password_index
+    global current_password_index, current_screen
 
     if not BUTTON_PINS["UP"].value:
-        current_password_index = (current_password_index + len(passwords_data) - 1) % len(passwords_data)
+        current_password_index = (current_password_index - 1) % len(passwords_data)
+        time.sleep(0.1)  # Debounce delay
     elif not BUTTON_PINS["DOWN"].value:
         current_password_index = (current_password_index + 1) % len(passwords_data)
-
-    if BUTTON_PINS["SET"].value == 0:
-        go_to_main_menu()
-        
-    if BUTTON_PINS["RESET"].value == 0:
+        time.sleep(0.1)  # Debounce delay
+    elif BUTTON_PINS["LEFT"].value == 0:  # Changed from SET to LEFT
+        current_screen = MAIN_MENU
+        time.sleep(0.1)  # Debounce delay
+    elif BUTTON_PINS["RIGHT"].value == 0:  # Changed from RESET to RIGHT
         initialize_usb_hid()
         SendStringHID(passwords_data[current_password_index][2])
+        time.sleep(0.1)  # Debounce delay
+
+    draw_view_passwords()  # Redraw the screen after each input
+
 
 def record_user_input(value):
     global user_input_index
@@ -304,26 +407,31 @@ def check_pattern():
     return True
 
 def handle_main_menu_input():
-    global selected_menu_item, reset_button_press_count
+    global selected_menu_item, reset_button_press_count, current_screen
 
     if not BUTTON_PINS["UP"].value:
-        selected_menu_item = (selected_menu_item - 1) % 7
+        selected_menu_item = (selected_menu_item - 1) % 8
+        time.sleep(0.1)  # Debounce delay
     elif not BUTTON_PINS["DOWN"].value:
-        selected_menu_item = (selected_menu_item + 1) % 7
+        selected_menu_item = (selected_menu_item + 1) % 8
+        time.sleep(0.1)  # Debounce delay
 
     if not BUTTON_PINS["CLICK"].value:
         handle_selected_menu_item()
+        time.sleep(0.1)  # Debounce delay
+        return  # Exit the function after handling the selection
 
-    # Check for SET button press
     if BUTTON_PINS["SET"].value == 0:
         go_to_main_menu()
+        time.sleep(0.1)  # Debounce delay
 
     if BUTTON_PINS["RESET"].value == 0:
         reset_button_press_count += 1
         if reset_button_press_count >= 3:
             reset_button_press_count = 0
             lock_device()
-
+        time.sleep(0.2)  # Debounce delay
+        
 def handle_add_password_input():
     global current_screen, passwords_data, password_input
 
@@ -585,84 +693,223 @@ def handle_rtc_check_status_input():
     
     
 ################Encryption###############################
+import os
 from encryption import derive_key, encrypt_password, decrypt_password
 
+SALT_FILE = "salt.bin"
+
+def save_salt(salt):
+    with open(SALT_FILE, "wb") as file:
+        file.write(salt)
+    os.chmod(SALT_FILE, 0o600)  # Adjust as needed for your target environment
+
+def load_salt():
+    try:
+        with open(SALT_FILE, "rb") as file:
+            salt = file.read()
+        if len(salt) != 16:
+            raise ValueError("Invalid salt length")
+        return salt
+    except (FileNotFoundError, ValueError):
+        new_salt = os.urandom(16)
+        save_salt(new_salt)
+        return new_salt
+
+salt = load_salt()
+iterations = 10  # You can now use a much higher iteration count
 unlock_pattern = ["up", "down", "up", "down", "up"]
-salt = b'random_salt'
-iterations = 10
-key = derive_key(unlock_pattern, salt, iterations)
-iv = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f')
+key = None  # Initialize key as None
 
 
-def draw_encryption_menu():
-    oled.fill(0)
-    oled.text("Encryption Menu", 10, 10, 1)
-    menu_options = ["Encrypt File", "Decrypt File"]
-    
-    for i, option in enumerate(menu_options):
-        if current_screen == ENCRYPT_FILE + i:
-            oled.text("> " + option, 0, 30 + i * 10, 1)
-        else:
-            oled.text("  " + option, 0, 30 + i * 10, 1)
-    
-    oled.show()
+def get_key():
+    global key
+    if key is None:
+        key = derive_key(unlock_pattern, salt, iterations)
+    return key
 
-def handle_encryption_menu_input():
-    global current_screen
 
-    if not BUTTON_PINS["UP"].value:
-        current_screen = max(ENCRYPT_FILE, current_screen - 1)
-        time.sleep(0.2)  # Debounce delay
-    elif not BUTTON_PINS["DOWN"].value:
-        current_screen = min(DECRYPT_FILE, current_screen + 1)
-        time.sleep(0.2)  # Debounce delay
-    elif not BUTTON_PINS["CLICK"].value:
-        if current_screen == ENCRYPT_FILE:
-            encrypt_file()
-        elif current_screen == DECRYPT_FILE:
-            decrypt_file()
-        time.sleep(0.2)  # Debounce delay
+# Add this constant near the top of your file
+ENCRYPTED_PASSWORDS_FILE = "encrypted_passwords.csv"
 
-    if BUTTON_PINS["SET"].value == 0:
-        current_screen = MAIN_MENU
-        time.sleep(0.2)  # Debounce delay
-        
+def create_empty_encrypted_file():
+    try:
+        # Try to open the file in read mode to check if it exists
+        with open(ENCRYPTED_PASSWORDS_FILE, "r"):
+            pass
+    except OSError:
+        # If the file doesn't exist, create an empty file
+        with open(ENCRYPTED_PASSWORDS_FILE, "w") as file:
+            pass
+        print("Created empty encrypted passwords file.")
+
+# Modify the encrypt_file function
 def encrypt_file():
     passwords_data = load_passwords()
+    if not passwords_data:
+        print("No passwords to encrypt.")
+        return
+
     encrypted_passwords = []
     for entry in passwords_data:
         if len(entry) == 3:
-            encrypted_password = encrypt_password(key, entry[2], iv)
-            encrypted_passwords.append([entry[0], entry[1], encrypted_password, '1'])
+            encrypted_password = encrypt_password(get_key(), entry[2])
+            encrypted_passwords.append([entry[0], entry[1], encrypted_password])
         else:
             encrypted_passwords.append(entry)
-    save_passwords(encrypted_passwords)
+    save_encrypted_passwords(encrypted_passwords)
     print("File encrypted successfully!")
-    time.sleep(2)  # Pause for 2 seconds
-    current_screen = ENCRYPTION_MENU
 
+# Modify the decrypt_file function
 def decrypt_file():
-    encrypted_passwords = load_passwords()
+    encrypted_passwords = load_encrypted_passwords()
     decrypted_passwords = []
     for entry in encrypted_passwords:
-        if len(entry) == 4 and entry[3] == '1':
-            decrypted_password = decrypt_password(key, entry[2], iv)
-            decrypted_passwords.append([entry[0], entry[1], decrypted_password])
+        if len(entry) == 3:
+            decrypted_password = decrypt_password(get_key(), entry[2])
+            if decrypted_password:
+                decrypted_passwords.append([entry[0], entry[1], decrypted_password])
+            else:
+                print(f"Failed to decrypt password for {entry[0]}")
         else:
-            decrypted_passwords.append(entry[:3])
+            decrypted_passwords.append(entry)
     save_passwords(decrypted_passwords)
     print("File decrypted successfully!")
-    time.sleep(2)  # Pause for 2 seconds
-    current_screen = ENCRYPTION_MENU
+
+
+def save_encrypted_passwords(passwords_data):
+    with open(ENCRYPTED_PASSWORDS_FILE, "w") as file:
+        for entry in passwords_data:
+            file.write(','.join(entry) + '\n')
+
+def load_encrypted_passwords():
+    try:
+        with open(ENCRYPTED_PASSWORDS_FILE, "r") as file:
+            return [line.strip().split(',') for line in file]
+    except Exception as e:
+        print("Error loading encrypted passwords:", e)
+        return []
+
+# Modify the load_and_decrypt_passwords function
+
+def load_and_decrypt_passwords():
+    global passwords_data
+    encrypted_passwords = load_encrypted_passwords()
+    if not encrypted_passwords:
+        return []
+
+    decrypted_passwords = []
+    for entry in encrypted_passwords:
+        if len(entry) == 3:
+            decrypted_password = decrypt_password(get_key(), entry[2])
+            if decrypted_password:
+                decrypted_passwords.append([entry[0], entry[1], decrypted_password])
+            else:
+                print(f"Failed to decrypt password for {entry[0]}")
+        else:
+            decrypted_passwords.append(entry)
     
-# Initialize passwords_data on startup
-passwords_data = load_passwords()
+    passwords_data = decrypted_passwords
+    return decrypted_passwords
+
+def draw_test_encryption(stage, data=None, error_message=None):
+    oled.fill(0)
+    oled.text("Test Encryption", 10, 0, 1)
+    
+    if stage == "start":
+        oled.text("Press UP to start", 10, 20, 1)
+        oled.text("Press SET to exit", 10, 30, 1)
+    elif stage == "encrypting":
+        oled.text("Encrypting...", 10, 20, 1)
+    elif stage == "encrypted":
+        oled.text("Encrypted:", 10, 20, 1)
+        if data:
+            for i, entry in enumerate(data[:2]):  # Show first 2 entries
+                oled.text(f"{entry[0][:8]}...", 10, 30 + i * 10, 1)
+        oled.text("Press DOWN to decrypt", 10, 50, 1)
+    elif stage == "decrypting":
+        oled.text("Decrypting...", 10, 20, 1)
+    elif stage == "decrypted":
+        oled.text("Decrypted:", 10, 20, 1)
+        if data:
+            for i, entry in enumerate(data[:2]):  # Show first 2 entries
+                oled.text(f"{entry[0][:8]}: {entry[2][:8]}...", 10, 30 + i * 10, 1)
+        oled.text("Press SET to finish", 10, 50, 1)
+    elif stage == "error":
+        oled.text("Error:", 10, 20, 1)
+        if error_message:
+            oled.text(error_message[:16], 10, 30, 1)
+            if len(error_message) > 16:
+                oled.text(error_message[16:32], 10, 40, 1)
+        oled.text("Press SET to exit", 10, 50, 1)
+    
+    oled.show()
+
+def handle_test_encryption():
+    global current_screen
+    stage = "start"
+    
+    while True:
+        draw_test_encryption(stage)
+        
+        if stage == "start":
+            if not BUTTON_PINS["UP"].value:
+                stage = "encrypting"
+                time.sleep(0.2)
+            elif BUTTON_PINS["SET"].value == 0:
+                current_screen = MAIN_MENU
+                return
+        
+        elif stage == "encrypting":
+            # Load sample data
+            sample_data = [
+                ["Website1", "Username1", "Password1"],
+                ["Website2", "Username2", "!@#$OmarSolieman54"],
+                ["Website3", "Username3", "Password3"]
+            ]
+            save_passwords(sample_data)
+            
+            # Encrypt the file
+            encrypt_file()
+            encrypted_data = load_encrypted_passwords()
+            stage = "encrypted"
+            draw_test_encryption(stage, encrypted_data)
+        
+        elif stage == "encrypted":
+            if not BUTTON_PINS["DOWN"].value:
+                stage = "decrypting"
+                time.sleep(0.2)
+        
+        elif stage == "decrypting":
+            # Decrypt the file
+            decrypt_file()
+            decrypted_data = load_passwords()
+            stage = "decrypted"
+            draw_test_encryption(stage, decrypted_data)
+        
+        elif stage == "decrypted":
+            if BUTTON_PINS["SET"].value == 0:
+                current_screen = MAIN_MENU
+                return
+        
+        time.sleep(0.1)
+
 
 # Main loop
+create_empty_encrypted_file()  # Create empty file on first boot
+
+draw_loading_screen()
+
+
 while True:
     if current_screen == LOCK_SCREEN:
         draw_lock_screen()
-        handle_lock_screen_input()
+        last_minute = rtc.datetime.tm_min
+        while current_screen == LOCK_SCREEN:
+            handle_lock_screen_input()
+            if rtc.datetime.tm_min != last_minute:
+                update_lock_screen_time()
+                last_minute = rtc.datetime.tm_min
+            time.sleep(0.1)
     elif current_screen == MAIN_MENU:
         draw_main_menu()
         handle_main_menu_input()
@@ -692,5 +939,7 @@ while True:
     elif current_screen == ENCRYPTION_MENU:
         draw_encryption_menu()
         handle_encryption_menu_input()
+    elif current_screen == TEST_ENCRYPTION:
+        handle_test_encryption()
 
     time.sleep(0.01)  # Adjust as needed

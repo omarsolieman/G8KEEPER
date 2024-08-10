@@ -48,8 +48,9 @@ def pbkdf2_hmac(hash_name, password, salt, iterations, dklen=None):
 
     return bytes(dk)
 
-# Derive key from unlock pattern
-def derive_key(unlock_pattern, salt, iterations):
+
+# Modify the derive_key function
+def derive_key(unlock_pattern, salt, iterations):  # Increased from 10 to 100000
     pattern_bytes = bytearray()
     for direction in unlock_pattern:
         if direction == "up":
@@ -85,8 +86,12 @@ def unpad(data):
 
 # Encrypt password
 # Encrypt password
-def encrypt_password(key, password, iv):
-    cipher = initialize_cipher(key, iv)  # Initialize the cipher with the provided key and IV
+# Modify the encrypt_password function
+
+# Encrypt password (modified to include IV)
+def encrypt_password(key, password):
+    iv = os.urandom(16)  # Generate a unique IV for each encryption
+    cipher = initialize_cipher(key, iv)
     password_bytes = pad(password.encode())
     encrypted_password = bytearray()
     for i in range(0, len(password_bytes), 16):
@@ -94,36 +99,66 @@ def encrypt_password(key, password, iv):
         encrypted_block = bytearray(16)
         cipher.encrypt_into(block, encrypted_block)
         encrypted_password.extend(encrypted_block)
-    return binascii.hexlify(encrypted_password).decode()
+    return binascii.hexlify(iv + encrypted_password).decode()  # Include IV in the output
 
-# Decrypt password
-def decrypt_password(key, encrypted_password, iv):
-    cipher = initialize_cipher(key, iv)
-    encrypted_password_bytes = binascii.unhexlify(encrypted_password)
-    print(f"Encrypted password bytes: {encrypted_password_bytes}")  # Debugging output
-    decrypted_password = bytearray()
-    for i in range(0, len(encrypted_password_bytes), 16):
-        block = encrypted_password_bytes[i:i+16]
-        decrypted_block = bytearray(16)
-        cipher.decrypt_into(block, decrypted_block)
-        decrypted_password.extend(decrypted_block)
-    print(f"Decrypted password bytes before unpadding: {decrypted_password}")  # Debugging output
+# Decrypt password (modified to extract IV)
+def decrypt_password(key, encrypted_password):
     try:
-        decrypted_password = unpad(decrypted_password).decode()
+        encrypted_data = binascii.unhexlify(encrypted_password)
+        iv, ciphertext = encrypted_data[:16], encrypted_data[16:]
+        cipher = initialize_cipher(key, iv)
+        decrypted_password = bytearray()
+        for i in range(0, len(ciphertext), 16):
+            block = ciphertext[i:i+16]
+            decrypted_block = bytearray(16)
+            cipher.decrypt_into(block, decrypted_block)
+            decrypted_password.extend(decrypted_block)
+        return unpad(decrypted_password).decode()
     except Exception as e:
-        print(f"Error during unpadding: {e}")
-        print(f"Decrypted password bytes: {decrypted_password}")
-        raise
-    return decrypted_password
+        print(f"Error during decryption: {e}")
+        return None
 
-# Example usage
-unlock_pattern = ["up", "down", "up", "down", "up"]
-salt = b'random_salt'
-iterations = 10
-key = derive_key(unlock_pattern, salt, iterations)
-iv = bytearray(b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0a\x0b\x0c\x0d\x0e\x0f')
-password = '!@#$OmarSolieman54'
-encrypted_password = encrypt_password(key, password, iv)
-print(f"Encrypted password: {encrypted_password}")
-decrypted_password = decrypt_password(key, encrypted_password, iv)
-print(f"Decrypted password: {decrypted_password}")
+SALT_FILE = "salt.bin"
+
+def save_salt(salt):
+    with open(SALT_FILE, "wb") as file:
+        file.write(salt)
+    os.chmod(SALT_FILE, 0o600)  # Adjust as needed for your target environment
+
+def load_salt():
+    try:
+        with open(SALT_FILE, "rb") as file:
+            salt = file.read()
+        if len(salt) != 16:
+            raise ValueError("Invalid salt length")
+        return salt
+    except (FileNotFoundError, ValueError):
+        new_salt = os.urandom(16)
+        save_salt(new_salt)
+        return new_salt
+    
+# Example usage and test functions
+# unlock_pattern = ["up", "down", "up", "down", "up"]
+# salt = load_salt()
+# iterations = 10  # Increased from 10
+# key = derive_key(unlock_pattern, salt, iterations)
+# password = '!@#$OmarSolieman54'
+# 
+# def test_encryption():
+#     encrypted_password = encrypt_password(key, password)
+#     print(f"Encrypted password: {encrypted_password}")
+#     return encrypted_password
+# 
+# def test_decryption(encrypted_password):
+#     decrypted_password = decrypt_password(key, encrypted_password)
+#     print(f"Decrypted password: {decrypted_password}")
+#     return decrypted_password
+# 
+# if __name__ == "__main__":
+#     encrypted = test_encryption()
+#     decrypted = test_decryption(encrypted)
+#     
+#     if decrypted == password:
+#         print("Encryption and decryption successful!")
+#     else:
+#         print("Error: Decrypted password does not match original password.")
