@@ -863,7 +863,7 @@ def handle_test_encryption():
             # Load sample data
             sample_data = [
                 ["Website1", "Username1", "Password1"],
-                ["Website2", "Username2", "!@#$OmarSolieman54"],
+                ["Website2", "Username2", "!@#$54Password"],
                 ["Website3", "Username3", "Password3"]
             ]
             save_passwords(sample_data)
