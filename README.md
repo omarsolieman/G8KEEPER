@@ -1,74 +1,101 @@
----
+# 🔒 G8KEEPER
+### The Offline & Secure Hardware Password Manager
 
-# 🔒G8KEEPER The Offline & Secure Hardware Password Manager
+> A completely offline hardware password manager that puts you in control of your security
 
-This project is an **Offline & Secure Hardware Password Manager** based on the RP2040 chip. Designed to be secure, portable, and easy to use, it ensures that your passwords are always safe and accessible only to you. With robust encryption and hardware-level protection, your data remains secure even when you're on the go.
+## 🎯 About
+G8KEEPER is a DIY hardware password manager based on the RP2040 chip. Designed to be secure, portable, and easy to use, it ensures that your passwords are always safe and accessible only to you. With robust encryption and hardware-level protection, your data remains secure even when you're on the go.
 
-## 🚀 Features
+## ⭐ Key Features
+* **💾 Secure Storage**
+  * 16MB dedicated storage space
+  * Hardware-level encryption
+  * Complete offline operation
+  * No wireless connectivity = No remote attacks
 
-- **RP2040 Chip**: Powered by the powerful RP2040 microcontroller.
-- **16MB Storage**: Ample space to securely store your passwords.
-- **USB-C & Battery Powered**: Flexibility to operate via USB-C or battery for portability.
-- **Tiny Form Factor**: Compact design that fits in your pocket.
-- **Secure Encryption**:
-  - PBKDF2-HMAC-SHA256 for key derivation.
-  - AES256 for password encryption.
-- **Simple Interface**: Easy to use with a minimalistic design.
-- **OLED Display**: Integrated display for viewing and managing passwords.
-- **Physical Buttons**: Intuitive physical controls for navigation and operation.
+* **🔐 Advanced Security**
+  * PBKDF2-HMAC-SHA256 key derivation
+  * AES256 password encryption
+  * Pattern-based unlock (387M combinations)
+  * Auto-lock functionality
 
-## 🛠️ Setup Instructions
+* **🎮 User Experience**
+  * Simple joystick + 2 button interface
+  * OLED display for clear visibility
+  * Intuitive menu navigation
+  * Password generation capability
 
-1. **Hardware Assembly**:
-   - Connect the RP2040 chip to the OLED display and other peripherals as per the schematic.
-   - Ensure the battery is properly connected if you intend to use the device in portable mode.
+* **⚡ Power & Connectivity**
+  * USB-C connection
+  * Battery powered operation
+  * Long battery life
+  * No cables needed for viewing
 
-2. **Software Installation**:
-   - Clone this repository to your local machine:
-     ```bash
-     git clone https://github.com/yourusername/offline-password-manager.git
-     ```
-   - Flash the provided firmware to the RP2040 chip using your preferred method.
+## 🛠️ Hardware Components
+* RP2040 microcontroller
+* 128x64 SSD1306 OLED display
+* Joystick for navigation
+* 2 tactile buttons
+* Custom 3D printed enclosure
+* Battery management system
 
-3. **Configuration**:
-   - Open the `config.py` file and set your preferences for encryption keys, display settings, etc.
-   - Upload the configuration to the device.
+## 📱 Interface
+```
+Main Menu
+├── View Passwords
+├── Add New Password
+├── Generate Password
+├── Settings
+└── Lock Device
+```
 
-4. **Password Management**:
-   - Store your passwords in the `passwords.csv` file. Each entry should be formatted as:
-     ```
-     service_name,username,password
-     ```
-   - The device will encrypt and securely store this information.
+## 🔧 Setup Guide
+1. **Hardware Assembly**
+   ```
+   1. Print the 3D enclosure parts
+   2. Wire the components following schematic
+   3. Test connections before assembly
+   4. Complete final assembly
+   ```
 
-## 🔑 Usage
+2. **Software Installation**
+   ```bash
+   git clone https://github.com/yourusername/g8keeper.git
+   cd g8keeper
+   # Follow firmware flashing instructions
+   ```
 
-1. **Power On**: Power the device using USB-C or the battery.
-2. **Navigate Menu**: Use the physical buttons to navigate through the menu.
-3. **View Passwords**: Select the "View Passwords" option to see your stored credentials.
-4. **Generate Passwords**: Use the "Generate Password" feature to create new, secure passwords.
-5. **Lock Screen**: Secure the device when not in use by enabling the lock screen.
+3. **Initial Configuration**
+   ```python
+   # config.py example
+   DISPLAY_TIMEOUT = 30  # seconds
+   AUTO_LOCK = True
+   PATTERN_LENGTH = 6    # unlock pattern length
+   ```
 
-## 📷 Screenshots
-
-![Device in Action](path-to-your-image-1.png)
-*Caption: The device displaying the main menu.*
-
-![Compact Design](path-to-your-image-2.png)
-*Caption: A close-up of the hardware setup.*
-
-## 🔒 Security
-
-This device is built with security in mind. All passwords are encrypted using AES256, and the keys are derived using PBKDF2-HMAC-SHA256, ensuring robust protection against unauthorized access.
+## 💻 Development
+Currently working on:
+- [ ] Enhanced encryption options
+- [ ] Improved battery life
+- [ ] Smaller form factor
+- [ ] Additional authentication methods
 
 ## 🤝 Contributing
+Contributions are welcome! Please feel free to submit issues and pull requests.
 
-We welcome contributions! Please feel free to submit pull requests or open issues to improve the project.
+## 📜 License
+This project is licensed under GPL-3.0 - see [LICENSE](LICENSE) for details.
 
-## 🧑‍💻 License
+## ⚠️ Security Notice
+While G8KEEPER is designed to be secure, it requires physical security. Keep the device safe and protected from physical tampering.
 
-This project is licensed under the GNU General Public License v3.0 (GPL-3.0) - see the [LICENSE](LICENSE) file for details.
+## 🙏 Acknowledgments
+* Raspberry Pi Foundation for the RP2040
+* CircuitPython community
+* Open-source security tools
+
+## 📞 Contact
+* GitHub Issues: [Create an issue](https://github.com/yourusername/g8keeper/issues)
 
 ---
-
-Let me know if you'd like any changes or additional sections! You can replace the placeholder paths with actual image links or files as needed.
+*Built with ❤️ for security and privacy*
